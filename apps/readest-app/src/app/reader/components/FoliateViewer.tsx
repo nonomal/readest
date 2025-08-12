@@ -13,7 +13,9 @@ import { usePagination } from '../hooks/usePagination';
 import { useFoliateEvents } from '../hooks/useFoliateEvents';
 import { useProgressSync } from '../hooks/useProgressSync';
 import { useProgressAutoSave } from '../hooks/useProgressAutoSave';
+import { useKOSync } from '../hooks/useKOSync';
 import {
+  applyFixedlayoutStyles,
   applyImageStyle,
   applyTranslationStyle,
   getStyles,
@@ -41,6 +43,7 @@ import { lockScreenOrientation } from '@/utils/bridge';
 import { useTextTranslation } from '../hooks/useTextTranslation';
 import { manageSyntaxHighlighting } from '@/utils/highlightjs';
 import { getViewInsets } from '@/utils/insets';
+import ConfirmSyncDialog from './ConfirmSyncDialog';
 
 declare global {
   interface Window {
@@ -65,6 +68,7 @@ const FoliateViewer: React.FC<{
   const viewRef = useRef<FoliateView | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const isViewCreated = useRef(false);
+  const doubleClickDisabled = useRef(!!viewSettings?.disableDoubleClick);
   const [toastMessage, setToastMessage] = useState('');
 
   useEffect(() => {
@@ -75,6 +79,12 @@ const FoliateViewer: React.FC<{
   useUICSS(bookKey);
   useProgressSync(bookKey);
   useProgressAutoSave(bookKey);
+  const {
+    syncState,
+    conflictDetails,
+    resolveConflictWithLocal,
+    resolveConflictWithRemote,
+  } = useKOSync(bookKey);
   useTextTranslation(bookKey, viewRef.current);
 
   const progressRelocateHandler = (event: Event) => {
@@ -103,7 +113,7 @@ const FoliateViewer: React.FC<{
               bookKey,
               viewSettings,
               content: data,
-              transformers: ['punctuation', 'footnote'],
+              transformers: ['punctuation', 'footnote', 'language'],
             };
             return Promise.resolve(transformContent(ctx));
           }
@@ -134,6 +144,10 @@ const FoliateViewer: React.FC<{
 
       mountAdditionalFonts(detail.doc, isCJKLang(bookData.book?.primaryLanguage));
 
+      if (bookDoc.rendition?.layout === 'pre-paginated') {
+        applyFixedlayoutStyles(detail.doc, viewSettings);
+      }
+
       applyImageStyle(detail.doc);
 
       // Inline scripts in tauri platforms are not executed by default
@@ -154,7 +168,7 @@ const FoliateViewer: React.FC<{
         detail.doc.addEventListener('keydown', handleKeydown.bind(null, bookKey));
         detail.doc.addEventListener('mousedown', handleMousedown.bind(null, bookKey));
         detail.doc.addEventListener('mouseup', handleMouseup.bind(null, bookKey));
-        detail.doc.addEventListener('click', handleClick.bind(null, bookKey));
+        detail.doc.addEventListener('click', handleClick.bind(null, bookKey, doubleClickDisabled));
         detail.doc.addEventListener('wheel', handleWheel.bind(null, bookKey));
         detail.doc.addEventListener('touchstart', handleTouchStart.bind(null, bookKey));
         detail.doc.addEventListener('touchmove', handleTouchMove.bind(null, bookKey));
@@ -251,6 +265,7 @@ const FoliateViewer: React.FC<{
       view.renderer.setStyles?.(getStyles(viewSettings));
       applyTranslationStyle(viewSettings);
 
+      doubleClickDisabled.current = viewSettings.disableDoubleClick!;
       const animated = viewSettings.animated!;
       const maxColumnCount = viewSettings.maxColumnCount!;
       const maxInlineSize = getMaxInlineSize(viewSettings);
@@ -312,9 +327,19 @@ const FoliateViewer: React.FC<{
     if (viewRef.current && viewRef.current.renderer) {
       const viewSettings = getViewSettings(bookKey)!;
       viewRef.current.renderer.setStyles?.(getStyles(viewSettings));
+      if (bookDoc.rendition?.layout === 'pre-paginated') {
+        const docs = viewRef.current.renderer.getContents();
+        docs.forEach(({ doc }) => applyFixedlayoutStyles(doc, viewSettings));
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [themeCode, isDarkMode]);
+  }, [themeCode, isDarkMode, viewSettings?.overrideColor, viewSettings?.invertImgColorInDark]);
+
+  useEffect(() => {
+    if (viewRef.current && viewRef.current.renderer) {
+      doubleClickDisabled.current = !!viewSettings?.disableDoubleClick;
+    }
+  }, [viewSettings?.disableDoubleClick]);
 
   useEffect(() => {
     if (viewRef.current && viewRef.current.renderer && viewSettings) {
@@ -332,12 +357,22 @@ const FoliateViewer: React.FC<{
   ]);
 
   return (
-    <div
-      ref={containerRef}
-      className='foliate-viewer h-[100%] w-[100%]'
-      {...mouseHandlers}
-      {...touchHandlers}
-    />
+    <>
+      <div
+        ref={containerRef}
+        className='foliate-viewer h-[100%] w-[100%]'
+        {...mouseHandlers}
+        {...touchHandlers}
+      />
+      {syncState === 'conflict' && conflictDetails && (
+        <ConfirmSyncDialog
+          details={conflictDetails}
+          onConfirmLocal={resolveConflictWithLocal}
+          onConfirmRemote={resolveConflictWithRemote}
+          onClose={resolveConflictWithLocal}
+        />
+      )}
+    </>
   );
 };
 

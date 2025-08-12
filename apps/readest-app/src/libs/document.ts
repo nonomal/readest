@@ -57,6 +57,8 @@ export interface SectionItem {
   size: number;
   linear: string;
   location?: Location;
+
+  createDocument: () => Promise<Document>;
 }
 
 export type BookMetadata = {
@@ -68,7 +70,7 @@ export type BookMetadata = {
   publisher?: string;
   published?: string;
   description?: string;
-  subject?: string[];
+  subject?: string | string[] | Contributor;
   identifier?: string;
 
   subtitle?: string;
@@ -83,6 +85,10 @@ export type BookMetadata = {
 
 export interface BookDoc {
   metadata: BookMetadata;
+  rendition?: {
+    layout?: 'pre-paginated' | 'reflowable';
+    viewport?: { width: number; height: number };
+  };
   dir: string;
   toc?: Array<TOCItem>;
   sections?: Array<SectionItem>;

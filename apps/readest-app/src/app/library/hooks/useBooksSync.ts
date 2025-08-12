@@ -72,6 +72,7 @@ export const useBooksSync = ({ onSyncStart, onSyncEnd }: UseBooksSyncProps) => {
       if (matchingBook) {
         if (!matchingBook.deletedAt && matchingBook.uploadedAt && !oldBook.coverDownloadedAt) {
           await appService?.downloadBook(oldBook, true);
+          oldBook.coverImageUrl = await appService?.generateCoverImageUrl(oldBook);
         }
         const mergedBook =
           matchingBook.updatedAt > oldBook.updatedAt

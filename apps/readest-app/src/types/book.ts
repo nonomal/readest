@@ -92,6 +92,7 @@ export interface BookLayout {
   scrolled: boolean;
   disableClick: boolean;
   swapClickArea: boolean;
+  disableDoubleClick: boolean;
   volumeKeysToFlip: boolean;
   continuousScroll: boolean;
   maxColumnCount: number;
@@ -148,8 +149,9 @@ export interface ViewConfig {
   showFooter: boolean;
   showRemainingTime: boolean;
   showRemainingPages: boolean;
-  showPageNumber: boolean;
+  showProgressInfo: boolean;
   showBarsOnScroll: boolean;
+  progressStyle: 'percentage' | 'fraction';
 }
 
 export interface TTSConfig {

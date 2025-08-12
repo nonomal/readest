@@ -12,15 +12,17 @@ import { useQuotaStats } from '@/hooks/useQuotaStats';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useSettingsStore } from '@/store/settingsStore';
 import { UserPlan } from '@/types/user';
-import { navigateToLibrary } from '@/utils/nav';
+import { navigateToLibrary, navigateToResetPassword } from '@/utils/nav';
 import { deleteUser } from '@/libs/user';
 import { eventDispatcher } from '@/utils/event';
 import { getStripe } from '@/libs/stripe/client';
 import { getAPIBaseUrl, isTauriAppPlatform, isWebAppPlatform } from '@/services/environment';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { getAccessToken } from '@/utils/access';
+import { IAPService, IAPProduct } from '@/utils/iap';
 import { getPlanDetails } from './utils/plan';
 import { Toast } from '@/components/Toast';
+import LegalLinks from '@/components/LegalLinks';
 import Spinner from '@/components/Spinner';
 import ProfileHeader from './components/Header';
 import UserInfo from './components/UserInfo';
@@ -32,14 +34,16 @@ import Checkout from './components/Checkout';
 const WEB_STRIPE_PLANS_URL = `${getAPIBaseUrl()}/stripe/plans`;
 const WEB_STRIPE_CHECKOUT_URL = `${getAPIBaseUrl()}/stripe/checkout`;
 const WEB_STRIPE_PORTAL_URL = `${getAPIBaseUrl()}/stripe/portal`;
+const SUBSCRIPTION_SUCCESS_PATH = '/user/subscription/success';
 
 export type AvailablePlan = {
   plan: UserPlan;
   price_id: string;
-  price: number;
+  price: number; // in cents
   currency: string;
   interval: string;
-  product: Stripe.Product;
+  productName: string;
+  product?: Stripe.Product;
 };
 
 type CheckoutState = {
@@ -87,6 +91,10 @@ const ProfilePage = () => {
     navigateToLibrary(router);
   };
 
+  const handleResetPassword = () => {
+    navigateToResetPassword(router);
+  };
+
   const handleConfirmDelete = async () => {
     try {
       await deleteUser();
@@ -100,7 +108,7 @@ const ProfilePage = () => {
     }
   };
 
-  const handleSubscribe = async (priceId?: string) => {
+  const handleStripeSubscribe = async (priceId?: string) => {
     const token = await getAccessToken();
     const stripe = await getStripe();
     if (!stripe) {
@@ -109,18 +117,30 @@ const ProfilePage = () => {
     }
     setLoading(true);
     const isEmbeddedCheckout = isTauriAppPlatform();
-    const { sessionId, clientSecret, url } = await fetch(WEB_STRIPE_CHECKOUT_URL, {
+    const response = await fetch(WEB_STRIPE_CHECKOUT_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({ priceId, embedded: isEmbeddedCheckout }),
-    }).then((res) => res.json());
+    });
     setLoading(false);
+    if (!response.ok) {
+      console.error('Failed to create Stripe checkout session');
+      posthog.capture('checkout_error', {
+        error: 'Failed to create Stripe checkout session',
+      });
+      eventDispatcher.dispatch('toast', {
+        type: 'info',
+        message: _('Failed to create checkout session'),
+      });
+      return;
+    }
+    const { sessionId, clientSecret, url } = await response.json();
 
     const selectedPlan = availablePlans.find((plan) => plan.price_id === priceId)!;
-    const planName = selectedPlan.product.name;
+    const planName = selectedPlan.product?.name || selectedPlan.productName;
     if (isEmbeddedCheckout && sessionId && clientSecret) {
       setShowEmbeddedCheckout(true);
       setCheckoutState({
@@ -153,10 +173,69 @@ const ProfilePage = () => {
   const handleCheckoutSuccess = useCallback(
     (sessionId: string) => {
       setShowEmbeddedCheckout(false);
-      router.push(`/user/subscription/success?session_id=${sessionId}`);
+      const params = new URLSearchParams({
+        payment: 'stripe',
+        session_id: sessionId,
+      });
+      router.push(`${SUBSCRIPTION_SUCCESS_PATH}?${params.toString()}`);
     },
     [router],
   );
+
+  const handleIAPSubscribe = async (productId?: string) => {
+    if (!productId) return;
+
+    setLoading(true);
+    const iapService = new IAPService();
+    try {
+      const purchase = await iapService.purchaseProduct(productId);
+      if (purchase) {
+        const params = new URLSearchParams({
+          payment: 'iap',
+          platform: purchase.platform,
+          transaction_id: purchase.transactionId,
+          original_transaction_id: purchase.originalTransactionId,
+        });
+        router.push(`${SUBSCRIPTION_SUCCESS_PATH}?${params.toString()}`);
+      }
+    } catch (error) {
+      console.error('IAP purchase error:', error);
+    }
+    setLoading(false);
+  };
+
+  const handleIAPRestorePurchase = async () => {
+    setLoading(true);
+    const iapService = new IAPService();
+    try {
+      const purchases = await iapService.restorePurchases();
+      if (purchases.length > 0) {
+        purchases.sort(
+          (a, b) => new Date(a.purchaseDate).getTime() - new Date(b.purchaseDate).getTime(),
+        );
+        const purchase = purchases[0]!;
+        const params = new URLSearchParams({
+          payment: 'iap',
+          platform: purchase.platform,
+          transaction_id: purchase.transactionId,
+          original_transaction_id: purchase.originalTransactionId,
+        });
+        router.push(`${SUBSCRIPTION_SUCCESS_PATH}?${params.toString()}`);
+      } else {
+        eventDispatcher.dispatch('toast', {
+          type: 'info',
+          message: _('No purchases found to restore.'),
+        });
+      }
+    } catch (error) {
+      console.error('Failed to restore purchases:', error);
+      eventDispatcher.dispatch('toast', {
+        type: 'info',
+        message: _('Failed to restore purchases.'),
+      });
+    }
+    setLoading(false);
+  };
 
   const handleManageSubscription = async () => {
     setLoading(true);
@@ -175,8 +254,8 @@ const ProfilePage = () => {
     if (error) {
       console.error('Error creating portal session:', error);
       eventDispatcher.dispatch('toast', {
-        type: 'error',
-        message: _('Failed to manage subscription. Please try again later.'),
+        type: 'info',
+        message: _('Failed to manage subscription.'),
       });
       return;
     }
@@ -189,16 +268,56 @@ const ProfilePage = () => {
   };
 
   useEffect(() => {
-    fetch(WEB_STRIPE_PLANS_URL)
-      .then((res) => res.json())
-      .then((data) => setAvailablePlans(data));
-  }, []);
+    if (!appService) return;
+
+    if (appService?.isIOSApp) {
+      const iapService = new IAPService();
+      iapService
+        .initialize()
+        .then(() =>
+          iapService.fetchProducts([
+            'com.bilingify.readest.monthly.plus',
+            'com.bilingify.readest.monthly.pro',
+          ]),
+        )
+        .then((products: IAPProduct[]) => {
+          const availablePlans: AvailablePlan[] = products.map((product) => ({
+            plan: product.id.includes('plus')
+              ? 'plus'
+              : product.id.includes('pro')
+                ? 'pro'
+                : 'free',
+            price_id: product.id,
+            price: product.priceAmountMicros / 10000,
+            currency: product.priceCurrencyCode || 'USD',
+            interval: 'month',
+            productName: product.title,
+          }));
+          setAvailablePlans(availablePlans);
+        })
+        .catch((error) => {
+          console.error('Failed to fetch IAP products:', error);
+          eventDispatcher.dispatch('toast', {
+            type: 'info',
+            message: _('Failed to load subscription plans.'),
+          });
+        });
+    } else {
+      fetch(WEB_STRIPE_PLANS_URL)
+        .then((res) => res.json())
+        .then((data) => {
+          const availablePlans = data && data instanceof Array ? data : [];
+          setAvailablePlans(availablePlans);
+        });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appService]);
 
   if (!mounted) {
     return null;
   }
 
-  if (!user || !token) {
+  if (!user || !token || !appService) {
     return (
       <div className='mx-auto max-w-4xl px-4 py-8'>
         <div className='overflow-hidden rounded-lg shadow-md'>
@@ -219,14 +338,18 @@ const ProfilePage = () => {
   return (
     <div
       className={clsx(
-        'bg-base-100 fixed inset-0 select-none overflow-hidden',
+        'bg-base-100 inset-0 select-none overflow-hidden',
         appService?.isIOSApp ? 'h-[100vh]' : 'h-dvh',
         appService?.isLinuxApp && 'window-border',
         appService?.hasRoundedWindow && 'rounded-window',
-        appService?.hasSafeAreaInset && 'pt-[env(safe-area-inset-top)]',
       )}
     >
-      <div className='flex h-full w-full flex-col items-center overflow-y-auto'>
+      <div
+        className={clsx(
+          'flex h-full w-full flex-col items-center overflow-y-auto',
+          appService?.hasSafeAreaInset && 'pt-[env(safe-area-inset-top)]',
+        )}
+      >
         <ProfileHeader onGoBack={handleGoBack} />
         <div className='w-full min-w-60 max-w-4xl py-10'>
           {loading && (
@@ -261,7 +384,7 @@ const ProfilePage = () => {
                   <PlansComparison
                     availablePlans={availablePlans}
                     userPlan={userPlan}
-                    onSubscribe={handleSubscribe}
+                    onSubscribe={appService.isIOSApp ? handleIAPSubscribe : handleStripeSubscribe}
                   />
                 </div>
 
@@ -269,10 +392,13 @@ const ProfilePage = () => {
                   <AccountActions
                     userPlan={userPlan}
                     onLogout={handleLogout}
+                    onResetPassword={handleResetPassword}
                     onConfirmDelete={handleConfirmDelete}
+                    onRestorePurchase={handleIAPRestorePurchase}
                     onManageSubscription={handleManageSubscription}
                   />
                 </div>
+                <LegalLinks />
               </div>
             </div>
           )}

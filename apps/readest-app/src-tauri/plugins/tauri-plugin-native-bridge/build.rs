@@ -9,6 +9,11 @@ const COMMANDS: &[&str] = &[
     "get_sys_fonts_list",
     "intercept_keys",
     "lock_screen_orientation",
+    "iap_initialize",
+    "iap_fetch_products",
+    "iap_purchase_product",
+    "iap_restore_purchases",
+    "get_system_color_scheme",
 ];
 
 fn main() {
