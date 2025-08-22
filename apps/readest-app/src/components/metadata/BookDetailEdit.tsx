@@ -6,7 +6,7 @@ import { Book } from '@/types/book';
 import { BookMetadata } from '@/libs/document';
 import { useEnv } from '@/context/EnvContext';
 import { useTranslation } from '@/hooks/useTranslation';
-import { formatAuthors, formatTitle } from '@/utils/book';
+import { flattenContributors, formatAuthors, formatPublisher, formatTitle } from '@/utils/book';
 import { FormField } from './FormField';
 import { IMAGE_ACCEPT_FORMATS, SUPPORTED_IMAGE_EXTS } from '@/services/constants';
 import { isTauriAppPlatform } from '@/services/environment';
@@ -107,14 +107,14 @@ const BookDetailEdit: React.FC<BookDetailEditProps> = ({
     {
       field: 'publisher',
       label: _('Publisher'),
-      value: metadata.publisher || '',
+      value: formatPublisher(metadata.publisher || ''),
       placeholder: _('Enter publisher'),
     },
     {
       field: 'published',
       label: _('Publication Date'),
       value: metadata.published || '',
-      placeholder: 'YYYY or YYYY-MM-DD',
+      placeholder: _('YYYY or YYYY-MM-DD'),
     },
     {
       field: 'language',
@@ -135,7 +135,7 @@ const BookDetailEdit: React.FC<BookDetailEditProps> = ({
     {
       field: 'subject',
       label: _('Subjects'),
-      value: Array.isArray(metadata.subject) ? metadata.subject.join(',') : metadata.subject || '',
+      value: flattenContributors(metadata.subject || []),
       placeholder: _('Fiction, Science, History'),
     },
     {
@@ -178,9 +178,12 @@ const BookDetailEdit: React.FC<BookDetailEditProps> = ({
     let files;
     if (isTauriAppPlatform()) {
       files = (await selectImageFileTauri()) as string[];
-      if (files.length > 0) {
+      if (appService && files.length > 0) {
         metadata.coverImageFile = files[0]!;
-        metadata.coverImageUrl = appService?.fs.getURL(files[0]!);
+        const tempName = `cover-${Date.now()}.png`;
+        const cachePrefix = await appService.fs.getPrefix('Cache');
+        await appService.fs.copyFile(files[0]!, tempName, 'Cache');
+        metadata.coverImageUrl = await appService.fs.getURL(`${cachePrefix}/${tempName}`);
         setNewCoverImageUrl(metadata.coverImageUrl!);
       }
     } else {
@@ -196,7 +199,10 @@ const BookDetailEdit: React.FC<BookDetailEditProps> = ({
     <div className='bg-base-100 relative w-full rounded-lg'>
       <div className='mb-6 flex items-start gap-4'>
         <div className='flex w-[30%] max-w-32 flex-col gap-2'>
-          <div className='aspect-[28/41] h-full shadow-md'>
+          <div
+            className='aspect-[28/41] h-full shadow-md'
+            onClick={!isCoverLocked ? handleSelectLocalImage : undefined}
+          >
             <BookCover
               mode='list'
               book={{
@@ -218,11 +224,16 @@ const BookDetailEdit: React.FC<BookDetailEditProps> = ({
                 'border border-gray-300 bg-white hover:bg-gray-50',
                 'disabled:cursor-not-allowed disabled:opacity-50',
                 'text-sm sm:text-xs',
-                isCoverLocked && '!text-base-content !bg-base-200',
+                isCoverLocked ? '!text-base-content !bg-base-200' : '!text-gray-500',
               )}
               title={_('Change cover image')}
             >
-              <MdEdit className='h-5 w-5 sm:h-4 sm:w-4' />
+              <MdEdit
+                className={clsx(
+                  'h-5 w-5 sm:h-4 sm:w-4',
+                  isCoverLocked ? 'fill-base-content' : 'fill-gray-600',
+                )}
+              />
               <span className='hidden sm:inline'>{_('Replace')}</span>
             </button>
 
@@ -364,7 +375,8 @@ const BookDetailEdit: React.FC<BookDetailEditProps> = ({
           </button>
           <button
             onClick={onSave}
-            className='rounded-md bg-green-500 px-4 py-2 text-white hover:bg-green-600'
+            disabled={fieldErrors && Object.keys(fieldErrors).length > 0}
+            className='rounded-md bg-green-500 px-4 py-2 text-white hover:bg-green-600 disabled:opacity-50'
           >
             {_('Save')}
           </button>

@@ -39,8 +39,9 @@ export const showReaderWindow = (appService: AppService, bookIds: string[]) => {
 };
 
 export const showLibraryWindow = (appService: AppService, filenames: string[]) => {
-  const files = filenames.map((file) => `${encodeURIComponent(file)}`).join(',');
-  const url = `/library?files=${files}`;
+  const params = new URLSearchParams();
+  filenames.forEach((filename) => params.append('file', filename));
+  const url = `/library?${params.toString()}`;
   createReaderWindow(appService, url);
 };
 
@@ -81,4 +82,11 @@ export const navigateToLibrary = (
 
 export const redirectToLibrary = () => {
   redirect('/library');
+};
+
+export const navigateToResetPassword = (router: ReturnType<typeof useRouter>) => {
+  const pathname = window.location.pathname;
+  const search = window.location.search;
+  const currentPath = pathname !== '/auth' ? pathname + search : '/';
+  router.push(`/auth/recovery?redirect=${encodeURIComponent(currentPath)}`);
 };

@@ -86,10 +86,12 @@ const getFontStyles = (
     [style*="font-size: 16px"], [style*="font-size:16px"] {
       font-size: 1rem !important;
     }
-    body * {
+    pre, code, kbd {
+      font-family: var(--monospace);
+    }
+    body *:not(pre):not(code):not(kbd):not(pre *):not(code *):not(kbd *) {
       ${overrideFont ? 'font-family: revert !important;' : ''}
     }
-    
   `;
   return fontStyles;
 };
@@ -110,7 +112,14 @@ const getColorStyles = (
     html, body {
       color: ${fg};
     }
-    div, p, h1, h2, h3, h4, h5, h6 {
+    html[has-background], body[has-background] {
+      --background-set: var(--theme-bg-color);
+    }
+    html {
+      background-color: var(--theme-bg-color, transparent);
+      background: var(--background-set, none);
+    }
+    section, div, p, font, h1, h2, h3, h4, h5, h6 {
       ${overrideColor ? `background-color: ${bg} !important;` : ''}
       ${overrideColor ? `color: ${fg} !important;` : ''}
     }
@@ -121,20 +130,27 @@ const getColorStyles = (
       ${overrideColor ? `color: ${primary};` : isDarkMode ? `color: lightblue;` : ''}
       text-decoration: none;
     }
-    p:has(img), span:has(img) {
-      background-color: ${bg};
-    }
     body.pbg {
       ${isDarkMode ? `background-color: ${bg} !important;` : ''}
     }
     img {
       ${isDarkMode && invertImgColorInDark ? 'filter: invert(100%);' : ''}
+      ${!isDarkMode && overrideColor ? 'mix-blend-mode: multiply;' : ''}
+    }
+    /* horizontal rule #1649 */
+    *:has(> hr[class]):not(body) {
+      background-color: ${bg};
+    }
+    hr {
+      mix-blend-mode: multiply;
     }
     /* inline images */
     p img, span img, sup img {
       mix-blend-mode: ${isDarkMode ? 'screen' : 'multiply'};
     }
     /* override inline hardcoded text color */
+    font[color="#000000"], font[color="#000"], font[color="black"],
+    font[color="rgb(0,0,0)"], font[color="rgb(0, 0, 0)"],
     *[style*="color: rgb(0,0,0)"], *[style*="color: rgb(0, 0, 0)"],
     *[style*="color: #000"], *[style*="color: #000000"], *[style*="color: black"],
     *[style*="color:rgb(0,0,0)"], *[style*="color:rgb(0, 0, 0)"],
@@ -190,17 +206,10 @@ const getLayoutStyles = (
       white-space: pre-wrap !important;
       tab-size: 2;
   }
-  html[has-background], body[has-background] {
-    --background-set: var(--theme-bg-color);
-  }
   html, body {
     ${writingMode === 'auto' ? '' : `writing-mode: ${writingMode} !important;`}
     text-align: var(--default-text-align);
     max-height: unset;
-  }
-  html {
-    background-color: var(--theme-bg-color, transparent);
-    background: var(--background-set, none);
   }
   body {
     overflow: unset;
@@ -229,7 +238,7 @@ const getLayoutStyles = (
     letter-spacing: ${letterSpacing}px ${overrideLayout ? '!important' : ''};
     text-indent: ${vertical ? textIndent * 1.2 : textIndent}em ${overrideLayout ? '!important' : ''};
     ${justify ? `text-align: justify ${overrideLayout ? '!important' : ''};` : ''}
-    ${!justify && overrideLayout ? 'text-align: unset !important;' : ''};
+    ${!justify && overrideLayout ? 'text-align: initial !important;' : ''};
     -webkit-hyphens: ${hyphenate ? 'auto' : 'manual'};
     hyphens: ${hyphenate ? 'auto' : 'manual'};
     -webkit-hyphenate-limit-before: 3;
@@ -311,7 +320,7 @@ const getLayoutStyles = (
     width: auto;
     height: auto;
   }
-  .duokan-footnote img {
+  .duokan-footnote img:not([class]) {
     width: 0.8em;
     height: 0.8em;
   }
@@ -484,14 +493,12 @@ export const transformStylesheet = (vw: number, vh: number, css: string) => {
     const hasTextAlignCenter = /text-align\s*:\s*center\s*[;$]/.test(block);
     const hasTextIndentZero = /text-indent\s*:\s*0(?:\.0+)?(?:px|em|rem|%)?\s*[;$]/.test(block);
 
-    if (hasTextAlignCenter) {
+    if (hasTextAlignCenter && hasTextIndentZero) {
       block = block.replace(/(text-align\s*:\s*center)(\s*;|\s*$)/g, '$1 !important$2');
-      if (hasTextIndentZero) {
-        block = block.replace(
-          /(text-indent\s*:\s*0(?:\.0+)?(?:px|em|rem|%)?)(\s*;|\s*$)/g,
-          '$1 !important$2',
-        );
-      }
+      block = block.replace(
+        /(text-indent\s*:\s*0(?:\.0+)?(?:px|em|rem|%)?)(\s*;|\s*$)/g,
+        '$1 !important$2',
+      );
       return selector + block;
     }
     return match;
@@ -518,10 +525,11 @@ export const transformStylesheet = (vw: number, vh: number, css: string) => {
     })
     .replace(/(\d*\.?\d+)vw/gi, (_, d) => (parseFloat(d) * vw) / 100 + 'px')
     .replace(/(\d*\.?\d+)vh/gi, (_, d) => (parseFloat(d) * vh) / 100 + 'px')
-    .replace(/[\s;]color\s*:\s*black/gi, 'color: var(--theme-fg-color)')
-    .replace(/[\s;]color\s*:\s*#000000/gi, 'color: var(--theme-fg-color)')
-    .replace(/[\s;]color\s*:\s*#000/gi, 'color: var(--theme-fg-color)')
-    .replace(/[\s;]color\s*:\s*rgb\(0,\s*0,\s*0\)/gi, 'color: var(--theme-fg-color)');
+    .replace(/([\s;])font-family\s*:\s*monospace/gi, '$1font-family: var(--monospace)')
+    .replace(/([\s;])color\s*:\s*black/gi, '$1color: var(--theme-fg-color)')
+    .replace(/([\s;])color\s*:\s*#000000/gi, '$1color: var(--theme-fg-color)')
+    .replace(/([\s;])color\s*:\s*#000/gi, '$1color: var(--theme-fg-color)')
+    .replace(/([\s;])color\s*:\s*rgb\(0,\s*0,\s*0\)/gi, '$1color: var(--theme-fg-color)');
   return css;
 };
 
@@ -536,4 +544,45 @@ export const applyImageStyle = (document: Document) => {
       img.classList.add('has-text-siblings');
     }
   });
+};
+
+export const applyFixedlayoutStyles = (
+  document: Document,
+  viewSettings: ViewSettings,
+  themeCode?: ThemeCode,
+) => {
+  if (!themeCode) {
+    themeCode = getThemeCode();
+  }
+  const { bg, fg, primary, isDarkMode } = themeCode;
+  const overrideColor = viewSettings.overrideColor!;
+  const invertImgColorInDark = viewSettings.invertImgColorInDark!;
+
+  const existingStyleId = 'fixed-layout-styles';
+  let style = document.getElementById(existingStyleId) as HTMLStyleElement;
+  if (style) {
+    style.remove();
+  }
+  style = document.createElement('style');
+  style.id = existingStyleId;
+  style.textContent = `
+    html {
+      --theme-bg-color: ${bg};
+      --theme-fg-color: ${fg};
+      --theme-primary-color: ${primary};
+      color-scheme: ${isDarkMode ? 'dark' : 'light'};
+    }
+    body {
+      position: relative;
+      background-color: var(--theme-bg-color);
+    }
+    img, canvas {
+      ${isDarkMode && invertImgColorInDark ? 'filter: invert(100%);' : ''}
+      ${!isDarkMode && overrideColor ? 'mix-blend-mode: multiply;' : ''}
+    }
+    img.singlePage {
+      position: relative;
+    }
+  `;
+  document.head.appendChild(style);
 };

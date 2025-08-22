@@ -43,7 +43,18 @@
       "identifier": "fs:allow-cache-read",
       "allow": [
         {
-          "path": "$CACHEDIR/**/*"
+          "path": "$APPCACHE/**/*"
+        },
+        {
+          "path": "/private/var/mobile/Containers/Data/Application/**/*"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-cache-write",
+      "allow": [
+        {
+          "path": "$APPCACHE/**/*"
         },
         {
           "path": "/private/var/mobile/Containers/Data/Application/**/*"
@@ -69,10 +80,19 @@
           "url": "https://edge.microsoft.com"
         },
         {
+          "url": "https://translate.toil.cc"
+        },
+        {
           "url": "https://*.microsofttranslator.com"
         },
         {
           "url": "https://translate.googleapis.com"
+        },
+        {
+          "url": "http://*:*"
+        },
+        {
+          "url": "https://*:*"
         }
       ]
     },

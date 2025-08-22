@@ -24,6 +24,7 @@ import { start, cancel, onUrl, onInvalidUrl } from '@fabianlars/tauri-plugin-oau
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { invoke } from '@tauri-apps/api/core';
 import { handleAuthCallback } from '@/helpers/auth';
+import { getUserPlan } from '@/utils/access';
 import { getAppleIdAuth, Scope } from './utils/appleIdAuth';
 import { authWithCustomTab, authWithSafari } from './utils/nativeAuth';
 import WindowButtons from '@/components/WindowButtons';
@@ -170,8 +171,11 @@ export default function AuthPage() {
       const accessToken = params.get('access_token');
       const refreshToken = params.get('refresh_token');
       const type = params.get('type');
-      const next = params.get('next') ?? '/';
       if (accessToken) {
+        let next = params.get('next') ?? '/';
+        if (getUserPlan(accessToken) === 'free') {
+          next = '/user';
+        }
         handleAuthCallback({ accessToken, refreshToken, type, next, login, navigate: router.push });
       }
     }
@@ -310,7 +314,13 @@ export default function AuthPage() {
       if (session?.access_token && session.user) {
         login(session.access_token, session.user);
         const redirectTo = new URLSearchParams(window.location.search).get('redirect');
-        router.push(redirectTo ?? '/library');
+        const lastRedirectAtKey = 'lastRedirectAt';
+        const lastRedirectAt = parseInt(localStorage.getItem(lastRedirectAtKey) || '0', 10);
+        const now = Date.now();
+        localStorage.setItem(lastRedirectAtKey, now.toString());
+        if (now - lastRedirectAt > 3000) {
+          router.push(redirectTo ?? '/library');
+        }
       }
     });
 
@@ -334,66 +344,82 @@ export default function AuthPage() {
   return isTauriAppPlatform() ? (
     <div
       className={clsx(
-        'bg-base-100 fixed inset-0 flex select-none flex-col items-center overflow-hidden overflow-y-auto',
+        'bg-base-100 inset-0 flex select-none flex-col items-center overflow-hidden',
         appService?.isIOSApp ? 'h-[100vh]' : 'h-dvh',
         appService?.isLinuxApp && 'window-border',
         appService?.hasRoundedWindow && 'rounded-window',
-        appService?.hasSafeAreaInset && 'pt-[env(safe-area-inset-top)]',
       )}
     >
       <div
-        ref={headerRef}
         className={clsx(
-          'fixed z-10 flex w-full items-center justify-between py-2 pe-6 ps-4',
-          appService?.hasTrafficLight && 'pt-11',
+          'flex h-full w-full flex-col items-center overflow-y-auto',
+          appService?.hasSafeAreaInset && 'pt-[env(safe-area-inset-top)]',
         )}
       >
-        <button onClick={handleGoBack} className={clsx('btn btn-ghost h-8 min-h-8 w-8 p-0')}>
-          <IoArrowBack className='text-base-content' />
-        </button>
+        <div
+          ref={headerRef}
+          className={clsx(
+            'fixed z-10 flex w-full items-center justify-between py-2 pe-6 ps-4',
+            appService?.hasTrafficLight && 'pt-11',
+          )}
+        >
+          <button
+            onClick={handleGoBack}
+            className={clsx('btn btn-ghost h-12 min-h-12 w-12 p-0 sm:h-8 sm:min-h-8 sm:w-8')}
+          >
+            <IoArrowBack className='text-base-content' />
+          </button>
 
-        {appService?.hasWindowBar && (
-          <WindowButtons
-            headerRef={headerRef}
-            showMinimize={!isTrafficLightVisible}
-            showMaximize={!isTrafficLightVisible}
-            showClose={!isTrafficLightVisible}
-            onClose={handleGoBack}
+          {appService?.hasWindowBar && (
+            <WindowButtons
+              headerRef={headerRef}
+              showMinimize={!isTrafficLightVisible}
+              showMaximize={!isTrafficLightVisible}
+              showClose={!isTrafficLightVisible}
+              onClose={handleGoBack}
+            />
+          )}
+        </div>
+        <div
+          className={clsx(
+            'z-20 flex flex-col items-center pb-8',
+            appService?.hasTrafficLight ? 'mt-24' : 'mt-12',
+          )}
+          style={{ maxWidth: '420px' }}
+        >
+          <ProviderLogin
+            provider='google'
+            handleSignIn={tauriSignIn}
+            Icon={FcGoogle}
+            label={_('Sign in with Google')}
           />
-        )}
-      </div>
-      <div
-        className={clsx('z-20 pb-8', appService?.hasTrafficLight ? 'mt-24' : 'mt-12')}
-        style={{ maxWidth: '420px' }}
-      >
-        <ProviderLogin
-          provider='google'
-          handleSignIn={tauriSignIn}
-          Icon={FcGoogle}
-          label={_('Sign in with Google')}
-        />
-        <ProviderLogin
-          provider='apple'
-          handleSignIn={appService?.isIOSApp || USE_APPLE_SIGN_IN ? tauriSignInApple : tauriSignIn}
-          Icon={FaApple}
-          label={_('Sign in with Apple')}
-        />
-        <ProviderLogin
-          provider='github'
-          handleSignIn={tauriSignIn}
-          Icon={FaGithub}
-          label={_('Sign in with GitHub')}
-        />
-        <hr className='border-base-300 my-3 mt-6 w-64 border-t' />
-        <Auth
-          supabaseClient={supabase}
-          appearance={{ theme: ThemeSupa }}
-          theme={isDarkMode ? 'dark' : 'light'}
-          magicLink={true}
-          providers={[]}
-          redirectTo={getTauriRedirectTo(false)}
-          localization={getAuthLocalization()}
-        />
+          <ProviderLogin
+            provider='apple'
+            handleSignIn={
+              appService?.isIOSApp || USE_APPLE_SIGN_IN ? tauriSignInApple : tauriSignIn
+            }
+            Icon={FaApple}
+            label={_('Sign in with Apple')}
+          />
+          <ProviderLogin
+            provider='github'
+            handleSignIn={tauriSignIn}
+            Icon={FaGithub}
+            label={_('Sign in with GitHub')}
+          />
+          <hr className='border-base-300 my-3 mt-6 w-64 border-t' />
+          <div className='w-full'>
+            <Auth
+              supabaseClient={supabase}
+              appearance={{ theme: ThemeSupa }}
+              theme={isDarkMode ? 'dark' : 'light'}
+              magicLink={true}
+              providers={[]}
+              redirectTo={getTauriRedirectTo(false)}
+              localization={getAuthLocalization()}
+            />
+          </div>
+        </div>
       </div>
     </div>
   ) : (

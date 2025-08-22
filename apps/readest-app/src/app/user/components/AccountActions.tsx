@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useEnv } from '@/context/EnvContext';
 import { useTranslation } from '@/hooks/useTranslation';
 import { UserPlan } from '@/types/user';
 
@@ -47,17 +48,22 @@ const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = ({
 interface AccountActionsProps {
   userPlan: UserPlan;
   onLogout: () => void;
+  onResetPassword: () => void;
   onConfirmDelete: () => void;
-  onManageSubscription: () => void;
+  onRestorePurchase?: () => void;
+  onManageSubscription?: () => void;
 }
 
 const AccountActions: React.FC<AccountActionsProps> = ({
   userPlan,
   onLogout,
+  onResetPassword,
   onConfirmDelete,
+  onRestorePurchase,
   onManageSubscription,
 }) => {
   const _ = useTranslation();
+  const { appService } = useEnv();
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
 
   const handleDeleteRequest = () => {
@@ -79,14 +85,29 @@ const AccountActions: React.FC<AccountActionsProps> = ({
         }}
       />
       <div className='flex flex-col gap-4 md:flex-row'>
-        {userPlan !== 'free' && (
+        {appService?.isIOSApp ? (
           <button
-            onClick={onManageSubscription}
+            onClick={onRestorePurchase}
             className='w-full rounded-lg bg-blue-100 px-6 py-3 font-medium text-blue-600 transition-colors hover:bg-blue-200 md:w-auto'
           >
-            {_('Manage Subscription')}
+            {_('Restore Purchase')}
           </button>
+        ) : (
+          userPlan !== 'free' && (
+            <button
+              onClick={onManageSubscription}
+              className='w-full rounded-lg bg-blue-100 px-6 py-3 font-medium text-blue-600 transition-colors hover:bg-blue-200 md:w-auto'
+            >
+              {_('Manage Subscription')}
+            </button>
+          )
         )}
+        <button
+          onClick={onResetPassword}
+          className='w-full rounded-lg bg-gray-200 px-6 py-3 font-medium text-gray-800 transition-colors hover:bg-gray-300 md:w-auto'
+        >
+          {_('Reset Password')}
+        </button>
         <button
           onClick={onLogout}
           className='w-full rounded-lg bg-gray-200 px-6 py-3 font-medium text-gray-800 transition-colors hover:bg-gray-300 md:w-auto'

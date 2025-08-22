@@ -1,7 +1,7 @@
 import clsx from 'clsx';
 import * as React from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { MdDelete, MdOpenInNew, MdOutlineCancel, MdInfoOutline } from 'react-icons/md';
 import { LuFolderPlus } from 'react-icons/lu';
 import { PiPlus } from 'react-icons/pi';
@@ -54,7 +54,6 @@ const Bookshelf: React.FC<BookshelfProps> = ({
   const { appService } = useEnv();
   const { settings } = useSettingsStore();
   const [loading, setLoading] = useState(false);
-  const [selectedBooks, setSelectedBooks] = useState<string[]>([]);
   const [showSelectModeActions, setShowSelectModeActions] = useState(false);
   const [showDeleteAlert, setShowDeleteAlert] = useState(false);
   const [showGroupingModal, setShowGroupingModal] = useState(false);
@@ -70,6 +69,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({
   const isImportingBook = useRef(false);
 
   const { setCurrentBookshelf, setLibrary } = useLibraryStore();
+  const { setSelectedBooks, getSelectedBooks, toggleSelectedBook } = useLibraryStore();
   const allBookshelfItems =
     viewMode === 'grid' ? generateGridItems(libraryBooks) : generateListItems(libraryBooks);
 
@@ -162,23 +162,24 @@ const Bookshelf: React.FC<BookshelfProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, libraryBooks, showGroupingModal]);
 
-  const toggleSelection = (id: string) => {
-    setSelectedBooks((prev) =>
-      prev.includes(id) ? prev.filter((selectedId) => selectedId !== id) : [...prev, id],
-    );
-  };
+  const toggleSelection = useCallback((id: string) => {
+    toggleSelectedBook(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const openSelectedBooks = () => {
     handleSetSelectMode(false);
     if (appService?.hasWindow && settings.openBookInNewWindow) {
-      showReaderWindow(appService, selectedBooks);
+      showReaderWindow(appService, getSelectedBooks());
     } else {
       setTimeout(() => setLoading(true), 200);
-      navigateToReader(router, selectedBooks);
+      navigateToReader(router, getSelectedBooks());
     }
   };
 
   const openBookDetails = () => {
+    handleSetSelectMode(false);
+    const selectedBooks = getSelectedBooks();
     const book = libraryBooks.find((book) => book.hash === selectedBooks[0]);
     if (book) {
       handleShowDetailsBook(book);
@@ -187,6 +188,7 @@ const Bookshelf: React.FC<BookshelfProps> = ({
 
   const getBooksToDelete = () => {
     const booksToDelete: Book[] = [];
+    const selectedBooks = getSelectedBooks();
     selectedBooks.forEach((id) => {
       for (const book of libraryBooks.filter((book) => book.hash === id || book.groupId === id)) {
         if (book && !book.deletedAt) {
@@ -221,7 +223,13 @@ const Bookshelf: React.FC<BookshelfProps> = ({
     const searchTerm = new RegExp(queryTerm, 'i');
     const title = formatTitle(item.title);
     const authors = formatAuthors(item.author);
-    return searchTerm.test(title) || searchTerm.test(authors);
+    return (
+      searchTerm.test(title) ||
+      searchTerm.test(authors) ||
+      searchTerm.test(item.format) ||
+      (item.groupName && searchTerm.test(item.groupName)) ||
+      (item.metadata?.description && searchTerm.test(item.metadata?.description))
+    );
   };
   const bookSorter = (a: Book, b: Book) => {
     const uiLanguage = localStorage?.getItem('i18nextLng') || '';
@@ -231,8 +239,8 @@ const Bookshelf: React.FC<BookshelfProps> = ({
         const bTitle = formatTitle(b.title);
         return aTitle.localeCompare(bTitle, uiLanguage || navigator.language);
       case 'author':
-        const aAuthors = formatAuthors(a.author);
-        const bAuthors = formatAuthors(b.author);
+        const aAuthors = formatAuthors(a.author, a?.primaryLanguage || 'en', true);
+        const bAuthors = formatAuthors(b.author, b?.primaryLanguage || 'en', true);
         return aAuthors.localeCompare(bAuthors, uiLanguage || navigator.language);
       case 'updated':
         return new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
@@ -286,6 +294,8 @@ const Bookshelf: React.FC<BookshelfProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSelectMode, isSelectAll, isSelectNone]);
 
+  const selectedBooks = getSelectedBooks();
+
   return (
     <div className='bookshelf'>
       <div
@@ -303,7 +313,9 @@ const Bookshelf: React.FC<BookshelfProps> = ({
             mode={viewMode as LibraryViewModeType}
             coverFit={coverFit as LibraryCoverFitType}
             isSelectMode={isSelectMode}
-            selectedBooks={selectedBooks}
+            itemSelected={
+              'hash' in item ? selectedBooks.includes(item.hash) : selectedBooks.includes(item.id)
+            }
             setLoading={setLoading}
             toggleSelection={toggleSelection}
             handleBookUpload={handleBookUpload}

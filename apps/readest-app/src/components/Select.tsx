@@ -26,8 +26,8 @@ export default function Select({
       value={value}
       onChange={onChange}
       className={clsx(
-        'select h-8 min-h-8 rounded-md border-none text-end text-sm',
-        'focus:outline-none focus:ring-0',
+        'select h-8 min-h-8 rounded-md border-none text-sm',
+        'bg-base-200 focus:outline-none focus:ring-0',
         className,
       )}
       disabled={disabled}

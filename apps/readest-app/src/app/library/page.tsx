@@ -8,22 +8,17 @@ import { OverlayScrollbarsComponent, OverlayScrollbarsComponentRef } from 'overl
 import 'overlayscrollbars/overlayscrollbars.css';
 
 import { Book } from '@/types/book';
-import { AppService } from '@/types/system';
+import { AppService, DeleteAction } from '@/types/system';
 import { navigateToLogin, navigateToReader } from '@/utils/nav';
-import {
-  formatAuthors,
-  formatTitle,
-  getFilename,
-  getPrimaryLanguage,
-  listFormater,
-} from '@/utils/book';
+import { formatAuthors, formatTitle, getPrimaryLanguage, listFormater } from '@/utils/book';
 import { eventDispatcher } from '@/utils/event';
 import { ProgressPayload } from '@/utils/transfer';
 import { throttle } from '@/utils/throttle';
+import { getFilename } from '@/utils/path';
 import { parseOpenWithFiles } from '@/helpers/openWith';
 import { isTauriAppPlatform, isWebAppPlatform } from '@/services/environment';
 import { checkForAppUpdates, checkAppReleaseNotes } from '@/helpers/updater';
-import { FILE_ACCEPT_FORMATS, SUPPORTED_FILE_EXTS } from '@/services/constants';
+import { BOOK_ACCEPT_FORMATS, SUPPORTED_BOOK_EXTS } from '@/services/constants';
 import { impactFeedback } from '@tauri-apps/plugin-haptics';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 
@@ -48,6 +43,7 @@ import {
 } from '@/utils/window';
 
 import { AboutWindow } from '@/components/AboutWindow';
+import { KOSyncSettingsWindow } from './components/KOSyncSettings';
 import { UpdaterWindow } from '@/components/UpdaterWindow';
 import { BookMetadata } from '@/libs/document';
 import { BookDetailModal } from '@/components/metadata';
@@ -152,12 +148,12 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
       } else {
         fileExt = file.name.split('.').pop()?.toLowerCase();
       }
-      return FILE_ACCEPT_FORMATS.includes(`.${fileExt}`);
+      return BOOK_ACCEPT_FORMATS.includes(`.${fileExt}`);
     });
     if (supportedFiles.length === 0) {
       eventDispatcher.dispatch('toast', {
         message: _('No supported files found. Supported formats: {{formats}}', {
-          formats: FILE_ACCEPT_FORMATS,
+          formats: BOOK_ACCEPT_FORMATS,
         }),
         type: 'error',
       });
@@ -344,12 +340,15 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
 
       // Reuse the library from the store when we return from the reader
       const library = libraryBooks.length > 0 ? libraryBooks : await appService.loadLibraryBooks();
-      setCheckOpenWithBooks(checkOpenWithBooks && (await handleOpenWithBooks(appService, library)));
-      setCheckLastOpenBooks(
-        checkLastOpenBooks &&
-          settings.openLastBooks &&
-          (await handleOpenLastBooks(appService, settings.lastOpenBooks, library)),
-      );
+      let opened = false;
+      if (checkOpenWithBooks) {
+        opened = await handleOpenWithBooks(appService, library);
+      }
+      setCheckOpenWithBooks(opened);
+      if (!opened && checkLastOpenBooks && settings.openLastBooks) {
+        opened = await handleOpenLastBooks(appService, settings.lastOpenBooks, library);
+      }
+      setCheckLastOpenBooks(opened);
 
       setLibrary(library);
       setLibraryLoaded(true);
@@ -433,15 +432,14 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
   };
 
   const selectFilesTauri = async () => {
-    const exts = appService?.isMobileApp ? [] : SUPPORTED_FILE_EXTS;
+    const exts = appService?.isIOSApp ? [] : SUPPORTED_BOOK_EXTS;
     const files = (await appService?.selectFiles(_('Select Books'), exts)) || [];
     if (appService?.isIOSApp) {
       return files.filter((file) => {
         const fileExt = file.split('.').pop()?.toLowerCase() || 'unknown';
-        return SUPPORTED_FILE_EXTS.includes(fileExt);
+        return SUPPORTED_BOOK_EXTS.includes(fileExt);
       });
     }
-    // Cannot filter out files on Android since some content providers may not return the file name
     return files;
   };
 
@@ -449,7 +447,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     return new Promise((resolve) => {
       const fileInput = document.createElement('input');
       fileInput.type = 'file';
-      fileInput.accept = FILE_ACCEPT_FORMATS;
+      fileInput.accept = BOOK_ACCEPT_FORMATS;
       fileInput.multiple = true;
       fileInput.click();
 
@@ -468,118 +466,109 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
     }));
   }, 500);
 
-  const handleBookUpload = async (book: Book) => {
-    try {
-      await appService?.uploadBook(book, (progress) => {
-        updateBookTransferProgress(book.hash, progress);
-      });
-      await updateBook(envConfig, book);
-      pushLibrary();
-      eventDispatcher.dispatch('toast', {
-        type: 'info',
-        timeout: 2000,
-        message: _('Book uploaded: {{title}}', {
-          title: book.title,
-        }),
-      });
-      return true;
-    } catch (err) {
-      if (err instanceof Error) {
-        if (err.message.includes('Not authenticated') && settings.keepLogin) {
-          settings.keepLogin = false;
-          setSettings(settings);
-          navigateToLogin(router);
-          return false;
-        } else if (err.message.includes('Insufficient storage quota')) {
-          eventDispatcher.dispatch('toast', {
-            type: 'error',
-            message: _('Insufficient storage quota'),
-          });
-          return false;
+  const handleBookUpload = useCallback(
+    async (book: Book) => {
+      try {
+        await appService?.uploadBook(book, (progress) => {
+          updateBookTransferProgress(book.hash, progress);
+        });
+        await updateBook(envConfig, book);
+        pushLibrary();
+        eventDispatcher.dispatch('toast', {
+          type: 'info',
+          timeout: 2000,
+          message: _('Book uploaded: {{title}}', {
+            title: book.title,
+          }),
+        });
+        return true;
+      } catch (err) {
+        if (err instanceof Error) {
+          if (err.message.includes('Not authenticated') && settings.keepLogin) {
+            settings.keepLogin = false;
+            setSettings(settings);
+            navigateToLogin(router);
+            return false;
+          } else if (err.message.includes('Insufficient storage quota')) {
+            eventDispatcher.dispatch('toast', {
+              type: 'error',
+              message: _('Insufficient storage quota'),
+            });
+            return false;
+          }
         }
+        eventDispatcher.dispatch('toast', {
+          type: 'error',
+          message: _('Failed to upload book: {{title}}', {
+            title: book.title,
+          }),
+        });
+        return false;
       }
-      eventDispatcher.dispatch('toast', {
-        type: 'error',
-        message: _('Failed to upload book: {{title}}', {
-          title: book.title,
-        }),
-      });
-      return false;
-    }
-  };
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [appService],
+  );
 
-  const handleBookDownload = async (book: Book) => {
-    try {
-      await appService?.downloadBook(book, false, (progress) => {
-        updateBookTransferProgress(book.hash, progress);
-      });
-      await updateBook(envConfig, book);
-      eventDispatcher.dispatch('toast', {
-        type: 'info',
-        timeout: 2000,
-        message: _('Book downloaded: {{title}}', {
-          title: book.title,
-        }),
-      });
-      return true;
-    } catch {
-      eventDispatcher.dispatch('toast', {
-        message: _('Failed to download book: {{title}}', {
-          title: book.title,
-        }),
-        type: 'error',
-      });
-      return false;
-    }
-  };
+  const handleBookDownload = useCallback(
+    async (book: Book, redownload = false) => {
+      try {
+        await appService?.downloadBook(book, false, redownload, (progress) => {
+          updateBookTransferProgress(book.hash, progress);
+        });
+        await updateBook(envConfig, book);
+        eventDispatcher.dispatch('toast', {
+          type: 'info',
+          timeout: 2000,
+          message: _('Book downloaded: {{title}}', {
+            title: book.title,
+          }),
+        });
+        return true;
+      } catch {
+        eventDispatcher.dispatch('toast', {
+          message: _('Failed to download book: {{title}}', {
+            title: book.title,
+          }),
+          type: 'error',
+        });
+        return false;
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [appService],
+  );
 
-  const handleBookDelete = async (book: Book) => {
-    try {
-      await appService?.deleteBook(book, !!book.uploadedAt, true);
-      await updateBook(envConfig, book);
-      pushLibrary();
-      eventDispatcher.dispatch('toast', {
-        type: 'info',
-        timeout: 2000,
-        message: _('Book deleted: {{title}}', {
-          title: book.title,
-        }),
-      });
-      return true;
-    } catch {
-      eventDispatcher.dispatch('toast', {
-        message: _('Failed to delete book: {{title}}', {
-          title: book.title,
-        }),
-        type: 'error',
-      });
-      return false;
-    }
-  };
-
-  const handleBookDeleteCloudBackup = async (book: Book) => {
-    try {
-      await appService?.deleteBook(book, !!book.uploadedAt, false);
-      await updateBook(envConfig, book);
-      pushLibrary();
-      eventDispatcher.dispatch('toast', {
-        type: 'info',
-        timeout: 2000,
-        message: _('Deleted cloud backup of the book: {{title}}', {
-          title: book.title,
-        }),
-      });
-      return true;
-    } catch (e) {
-      console.error(e);
-      eventDispatcher.dispatch('toast', {
-        type: 'error',
-        message: _('Failed to delete cloud backup of the book', {
-          title: book.title,
-        }),
-      });
-      return false;
-    }
+  const handleBookDelete = (deleteAction: DeleteAction) => {
+    return async (book: Book) => {
+      const deletionMessages = {
+        both: _('Book deleted: {{title}}', { title: book.title }),
+        cloud: _('Deleted cloud backup of the book: {{title}}', { title: book.title }),
+        local: _('Deleted local copy of the book: {{title}}', { title: book.title }),
+      };
+      const deletionFailMessages = {
+        both: _('Failed to delete book: {{title}}', { title: book.title }),
+        cloud: _('Failed to delete cloud backup of the book: {{title}}', { title: book.title }),
+        local: _('Failed to delete local copy of the book: {{title}}', { title: book.title }),
+      };
+      try {
+        await appService?.deleteBook(book, deleteAction);
+        await updateBook(envConfig, book);
+        pushLibrary();
+        eventDispatcher.dispatch('toast', {
+          type: 'info',
+          timeout: 2000,
+          message: deletionMessages[deleteAction],
+        });
+        return true;
+      } catch {
+        eventDispatcher.dispatch('toast', {
+          message: deletionFailMessages[deleteAction],
+          type: 'error',
+        });
+        return false;
+      }
+    };
   };
 
   const handleUpdateMetadata = async (book: Book, metadata: BookMetadata) => {
@@ -721,7 +710,7 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
                 handleImportBooks={handleImportBooks}
                 handleBookUpload={handleBookUpload}
                 handleBookDownload={handleBookDownload}
-                handleBookDelete={handleBookDelete}
+                handleBookDelete={handleBookDelete('both')}
                 handleSetSelectMode={handleSetSelectMode}
                 handleShowDetailsBook={handleShowDetailsBook}
                 booksTransferProgress={booksTransferProgress}
@@ -753,12 +742,14 @@ const LibraryPageContent = ({ searchParams }: { searchParams: ReadonlyURLSearchP
           onClose={() => setShowDetailsBook(null)}
           handleBookUpload={handleBookUpload}
           handleBookDownload={handleBookDownload}
-          handleBookDelete={handleBookDelete}
-          handleBookDeleteCloudBackup={handleBookDeleteCloudBackup}
+          handleBookDelete={handleBookDelete('both')}
+          handleBookDeleteCloudBackup={handleBookDelete('cloud')}
+          handleBookDeleteLocalCopy={handleBookDelete('local')}
           handleBookMetadataUpdate={handleUpdateMetadata}
         />
       )}
       <AboutWindow />
+      <KOSyncSettingsWindow />
       <UpdaterWindow />
       <Toast />
     </div>

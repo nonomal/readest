@@ -8,6 +8,7 @@ import { TbSunMoon } from 'react-icons/tb';
 import { BiMoon, BiSun } from 'react-icons/bi';
 
 import { setAboutDialogVisible } from '@/components/AboutWindow';
+import { setKOSyncSettingsWindowVisible } from './KOSyncSettings';
 import { isTauriAppPlatform, isWebAppPlatform } from '@/services/environment';
 import { DOWNLOAD_READEST_URL } from '@/services/constants';
 import { useAuth } from '@/context/AuthContext';
@@ -33,7 +34,7 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ setIsDropdownOpen }) => {
   const router = useRouter();
   const { envConfig, appService } = useEnv();
   const { user } = useAuth();
-  const { userPlan, quotas } = useQuotaStats();
+  const { userPlan, quotas } = useQuotaStats(true);
   const { themeMode, setThemeMode } = useThemeStore();
   const { settings, setSettings, saveSettings } = useSettingsStore();
   const [isAutoUpload, setIsAutoUpload] = useState(settings.autoUpload);
@@ -158,6 +159,11 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ setIsDropdownOpen }) => {
     setIsTelemetryEnabled(settings.telemetryEnabled);
   };
 
+  const showKoSyncSettingsWindow = () => {
+    setKOSyncSettingsWindowVisible(true);
+    setIsDropdownOpen?.(false);
+  };
+
   const handleUpgrade = () => {
     navigateToProfile(router);
     setIsDropdownOpen?.(false);
@@ -192,7 +198,9 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ setIsDropdownOpen }) => {
           }
         >
           <ul>
-            <Quota quotas={quotas} labelClassName='h-10 pl-3 pr-2' />
+            <div onClick={handleUserProfile} className='cursor-pointer'>
+              <Quota quotas={quotas} labelClassName='h-10 pl-3 pr-2' />
+            </div>
             <MenuItem label={_('Account')} noIcon onClick={handleUserProfile} />
           </ul>
         </MenuItem>
@@ -265,6 +273,8 @@ const SettingsMenu: React.FC<SettingsMenuProps> = ({ setIsDropdownOpen }) => {
         Icon={themeMode === 'dark' ? BiMoon : themeMode === 'light' ? BiSun : TbSunMoon}
         onClick={cycleThemeMode}
       />
+      <hr className='border-base-200 my-1' />
+      <MenuItem label={_('KOReader Sync')} onClick={showKoSyncSettingsWindow} />
       <hr className='border-base-200 my-1' />
       {user && userPlan === 'free' && !appService?.isIOSApp && (
         <MenuItem label={_('Upgrade to Readest Premium')} onClick={handleUpgrade} />

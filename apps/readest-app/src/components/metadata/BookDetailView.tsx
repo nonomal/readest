@@ -1,9 +1,9 @@
+import clsx from 'clsx';
 import React from 'react';
 import {
-  MdOutlineDelete,
   MdOutlineCloudDownload,
   MdOutlineCloudUpload,
-  MdOutlineCloudOff,
+  MdOutlineDelete,
   MdOutlineEdit,
 } from 'react-icons/md';
 
@@ -16,10 +16,11 @@ import {
   formatFileSize,
   formatLanguage,
   formatPublisher,
-  formatSubject,
   formatTitle,
 } from '@/utils/book';
 import BookCover from '@/components/BookCover';
+import Dropdown from '../Dropdown';
+import MenuItem from '../MenuItem';
 
 interface BookDetailViewProps {
   book: Book;
@@ -28,6 +29,7 @@ interface BookDetailViewProps {
   onEdit?: () => void;
   onDelete?: () => void;
   onDeleteCloudBackup?: () => void;
+  onDeleteLocalCopy?: () => void;
   onDownload?: () => void;
   onUpload?: () => void;
 }
@@ -39,6 +41,7 @@ const BookDetailView: React.FC<BookDetailViewProps> = ({
   onEdit,
   onDelete,
   onDeleteCloudBackup,
+  onDeleteLocalCopy,
   onDownload,
   onUpload,
 }) => {
@@ -66,14 +69,40 @@ const BookDetailView: React.FC<BookDetailViewProps> = ({
               </button>
             )}
             {onDelete && (
-              <button onClick={onDelete}>
-                <MdOutlineDelete className='fill-red-500' />
-              </button>
-            )}
-            {book.uploadedAt && onDeleteCloudBackup && (
-              <button onClick={onDeleteCloudBackup}>
-                <MdOutlineCloudOff className='fill-red-500' />
-              </button>
+              <Dropdown
+                className='dropdown-bottom flex justify-center'
+                buttonClassName='btn btn-ghost h-8 min-h-8 w-8 p-0'
+                toggleButton={<MdOutlineDelete className='fill-red-500' />}
+              >
+                <div
+                  tabIndex={0}
+                  className={clsx(
+                    'delete-menu dropdown-content dropdown-center no-triangle',
+                    'border-base-200 z-20 mt-1 max-w-[90vw] shadow-2xl',
+                  )}
+                >
+                  <MenuItem
+                    noIcon
+                    transient
+                    label={_('Remove from Cloud & Device')}
+                    onClick={onDelete}
+                  />
+                  <MenuItem
+                    noIcon
+                    transient
+                    label={_('Remove from Cloud Only')}
+                    onClick={onDeleteCloudBackup}
+                    disabled={!book.uploadedAt}
+                  />
+                  <MenuItem
+                    noIcon
+                    transient
+                    label={_('Remove from Device Only')}
+                    onClick={onDeleteLocalCopy}
+                    disabled={!book.downloadedAt}
+                  />
+                </div>
+              </Dropdown>
             )}
             {book.uploadedAt && onDownload && (
               <button onClick={onDownload}>
@@ -100,7 +129,7 @@ const BookDetailView: React.FC<BookDetailViewProps> = ({
           <div className='overflow-hidden'>
             <span className='font-bold'>{_('Published')}</span>
             <p className='text-neutral-content text-sm'>
-              {formatDate(metadata.published) || _('Unknown')}
+              {formatDate(metadata.published, true) || _('Unknown')}
             </p>
           </div>
           <div className='overflow-hidden'>
@@ -120,7 +149,7 @@ const BookDetailView: React.FC<BookDetailViewProps> = ({
           <div className='overflow-hidden'>
             <span className='font-bold'>{_('Subjects')}</span>
             <p className='text-neutral-content line-clamp-3 text-sm'>
-              {formatSubject(metadata.subject) || _('Unknown')}
+              {formatAuthors(metadata.subject || '') || _('Unknown')}
             </p>
           </div>
           <div className='overflow-hidden'>

@@ -22,7 +22,7 @@ interface BookItemProps {
   mode: LibraryViewModeType;
   coverFit: LibraryCoverFitType;
   isSelectMode: boolean;
-  selectedBooks: string[];
+  bookSelected: boolean;
   transferProgress: number | null;
   handleBookUpload: (book: Book) => void;
   handleBookDownload: (book: Book) => void;
@@ -34,7 +34,7 @@ const BookItem: React.FC<BookItemProps> = ({
   mode,
   coverFit,
   isSelectMode,
-  selectedBooks,
+  bookSelected,
   transferProgress,
   handleBookUpload,
   handleBookDownload,
@@ -61,18 +61,19 @@ const BookItem: React.FC<BookItemProps> = ({
     >
       <div
         className={clsx(
-          'relative flex aspect-[28/41] items-center justify-center',
+          'relative flex aspect-[28/41] justify-center',
           coverFit === 'crop' && 'overflow-hidden shadow-md',
-          mode === 'list' && 'min-w-20',
+          mode === 'grid' && 'items-end',
+          mode === 'list' && 'min-w-20 items-center',
         )}
       >
-        <BookCover mode={mode} book={book} coverFit={coverFit} />
-        {selectedBooks.includes(book.hash) && (
+        <BookCover mode={mode} book={book} coverFit={coverFit} showSpine={false} />
+        {bookSelected && (
           <div className='absolute inset-0 bg-black opacity-30 transition-opacity duration-300'></div>
         )}
         {isSelectMode && (
           <div className='absolute bottom-1 right-1'>
-            {selectedBooks.includes(book.hash) ? (
+            {bookSelected ? (
               <MdCheckCircle className='fill-blue-500' />
             ) : (
               <MdCheckCircleOutline className='fill-gray-300 drop-shadow-sm' />

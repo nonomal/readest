@@ -17,7 +17,7 @@ jobs:
       release_version: ${{ steps.get-release-notes.outputs.release_version }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: setup node
         uses: actions/setup-node@v4
       - name: get version
@@ -91,7 +91,7 @@ jobs:
     runs-on: ${{ matrix.config.os }}
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: initialize git submodules
         run: git submodule update --init --recursive
@@ -99,7 +99,7 @@ jobs:
       - name: setup pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9.14.4
+          version: 10.14.0
 
       - name: setup node
         uses: actions/setup-node@v4

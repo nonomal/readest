@@ -5,7 +5,8 @@ import { ProgressHandler } from '@/utils/transfer';
 
 export type AppPlatform = 'web' | 'tauri';
 export type OsPlatform = 'android' | 'ios' | 'macos' | 'windows' | 'linux' | 'unknown';
-export type BaseDir = 'Books' | 'Settings' | 'Data' | 'Log' | 'Cache' | 'None';
+export type BaseDir = 'Books' | 'Settings' | 'Data' | 'Fonts' | 'Log' | 'Cache' | 'Temp' | 'None';
+export type DeleteAction = 'cloud' | 'local' | 'both';
 
 export interface FileSystem {
   getURL(path: string): string;
@@ -19,7 +20,7 @@ export interface FileSystem {
   createDir(path: string, base: BaseDir, recursive?: boolean): Promise<void>;
   removeDir(path: string, base: BaseDir, recursive?: boolean): Promise<void>;
   exists(path: string, base: BaseDir): Promise<boolean>;
-  getPrefix(base: BaseDir): string | null;
+  getPrefix(base: BaseDir): Promise<string>;
 }
 
 export interface AppService {
@@ -57,9 +58,14 @@ export interface AppService {
     overwrite?: boolean,
     transient?: boolean,
   ): Promise<Book | null>;
-  deleteBook(book: Book, includingUploaded?: boolean, includingLocal?: boolean): Promise<void>;
+  deleteBook(book: Book, deleteAction: DeleteAction): Promise<void>;
   uploadBook(book: Book, onProgress?: ProgressHandler): Promise<void>;
-  downloadBook(book: Book, onlyCover?: boolean, onProgress?: ProgressHandler): Promise<void>;
+  downloadBook(
+    book: Book,
+    onlyCover?: boolean,
+    redownload?: boolean,
+    onProgress?: ProgressHandler,
+  ): Promise<void>;
   isBookAvailable(book: Book): Promise<boolean>;
   getBookFileSize(book: Book): Promise<number | null>;
   loadBookConfig(book: Book, settings: SystemSettings): Promise<BookConfig>;

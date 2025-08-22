@@ -17,8 +17,9 @@ import { stubTranslation as _ } from '@/utils/misc';
 
 export const LOCAL_BOOKS_SUBDIR = 'Readest/Books';
 export const CLOUD_BOOKS_SUBDIR = 'Readest/Books';
+export const LOCAL_FONTS_SUBDIR = 'Readest/Fonts';
 
-export const SUPPORTED_FILE_EXTS = [
+export const SUPPORTED_BOOK_EXTS = [
   'epub',
   'mobi',
   'azw',
@@ -29,7 +30,7 @@ export const SUPPORTED_FILE_EXTS = [
   'pdf',
   'txt',
 ];
-export const FILE_ACCEPT_FORMATS = SUPPORTED_FILE_EXTS.map((ext) => `.${ext}`).join(', ');
+export const BOOK_ACCEPT_FORMATS = SUPPORTED_BOOK_EXTS.map((ext) => `.${ext}`).join(', ');
 export const BOOK_UNGROUPED_NAME = '';
 export const BOOK_UNGROUPED_ID = '';
 
@@ -40,7 +41,7 @@ export const DEFAULT_SYSTEM_SETTINGS: Partial<SystemSettings> = {
   keepLogin: false,
   autoUpload: true,
   alwaysOnTop: false,
-  openBookInNewWindow: false,
+  openBookInNewWindow: true,
   alwaysShowStatusBar: false,
   autoCheckUpdates: true,
   screenWakeLock: false,
@@ -52,6 +53,15 @@ export const DEFAULT_SYSTEM_SETTINGS: Partial<SystemSettings> = {
   librarySortBy: 'updated',
   librarySortAscending: false,
   libraryCoverFit: 'crop',
+
+  koreaderSyncServerUrl: 'https://sync.koreader.rocks/', // https://kosync.ak-team.com:3042/
+  koreaderSyncUsername: '',
+  koreaderSyncUserkey: '',
+  koreaderSyncDeviceId: '',
+  koreaderSyncDeviceName: '',
+  koreaderSyncChecksumMethod: 'binary',
+  koreaderSyncStrategy: 'prompt',
+  koreaderSyncPercentageTolerance: 0.00001,
 
   lastSyncedAtBooks: 0,
   lastSyncedAtConfigs: 0,
@@ -105,6 +115,7 @@ export const DEFAULT_BOOK_LAYOUT: BookLayout = {
   scrolled: false,
   disableClick: false,
   swapClickArea: false,
+  disableDoubleClick: false,
   volumeKeysToFlip: false,
   continuousScroll: false,
   maxColumnCount: 2,
@@ -143,6 +154,7 @@ export const DEFAULT_MOBILE_VIEW_SETTINGS: Partial<ViewSettings> = {
   animated: true,
   defaultFont: 'Sans-serif',
   marginBottomPx: 16,
+  disableDoubleClick: true,
 };
 
 export const DEFAULT_CJK_VIEW_SETTINGS: Partial<ViewSettings> = {
@@ -163,7 +175,8 @@ export const DEFAULT_VIEW_CONFIG: ViewConfig = {
   showBarsOnScroll: false,
   showRemainingTime: false,
   showRemainingPages: false,
-  showPageNumber: true,
+  showProgressInfo: true,
+  progressStyle: 'fraction',
 };
 
 export const DEFAULT_TTS_CONFIG: TTSConfig = {
@@ -483,7 +496,6 @@ export const ANDROID_FONTS = [
   'XiHeiti',
 ];
 
-export const CJK_NAMES_PATTENS = /[\u3040-\u30FF\u4E00-\u9FFF\uAC00-\uD7AF]/;
 export const CJK_EXCLUDE_PATTENS = new RegExp(
   ['AlBayan', 'STIX', 'Kailasa', 'ITCTT', 'Luminari', 'Myanmar'].join('|'),
   'i',
@@ -535,6 +547,7 @@ export const BOOK_IDS_SEPARATOR = '+';
 export const DOWNLOAD_READEST_URL = 'https://readest.com?utm_source=readest_web';
 
 export const READEST_WEB_BASE_URL = 'https://web.readest.com';
+export const READEST_NODE_BASE_URL = 'https://node.readest.com';
 
 const LATEST_DOWNLOAD_BASE_URL = 'https://download.readest.com/releases';
 
@@ -555,8 +568,8 @@ export const ZOOM_STEP = 10;
 
 export const DEFAULT_STORAGE_QUOTA: UserStorageQuota = {
   free: 500 * 1024 * 1024,
-  plus: 2 * 1024 * 1024 * 1024,
-  pro: 10 * 1024 * 1024 * 1024,
+  plus: 5 * 1024 * 1024 * 1024,
+  pro: 20 * 1024 * 1024 * 1024,
 };
 
 export const DEFAULT_DAILY_TRANSLATION_QUOTA: UserDailyTranslationQuota = {
@@ -651,8 +664,29 @@ export const TRANSLATED_LANGS = {
   id: 'Indonesia',
   vi: 'Tiếng Việt',
   th: 'ภาษาไทย',
+  bo: 'བོད་སྐད་',
   'zh-CN': '简体中文',
   'zh-TW': '正體中文',
 };
 
+export const TRANSLATOR_LANGS: Record<string, string> = {
+  ...TRANSLATED_LANGS,
+  no: 'Norsk',
+  sv: 'Svenska',
+  fi: 'Suomi',
+  da: 'Dansk',
+  cs: 'Čeština',
+  hu: 'Magyar',
+  ro: 'Română',
+  bg: 'Български',
+  hr: 'Hrvatski',
+  lt: 'Lietuvių',
+  sl: 'Slovenščina',
+  sk: 'Slovenčina',
+};
+
 export const SUPPORTED_LANGS: Record<string, string> = { ...TRANSLATED_LANGS, zh: '中文' };
+
+export const SUPPORTED_LANGNAMES: Record<string, string> = Object.fromEntries(
+  Object.entries(SUPPORTED_LANGS).map(([code, name]) => [name, code]),
+);

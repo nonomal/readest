@@ -13,6 +13,7 @@ export type PlanDetails = {
   color: string;
   hintColor: string;
   price: number;
+  currency: string;
   price_id?: string;
   interval: string;
   features: FeatureType[];
@@ -22,8 +23,12 @@ export type PlanDetails = {
 export const getPlanDetails = (
   userPlan: UserPlan,
   availablePlans: AvailablePlan[],
+  interval: 'month' | 'year' = 'month',
 ): PlanDetails => {
-  const availablePlan = availablePlans.find((plan) => plan.plan === userPlan);
+  const availablePlan = availablePlans.find(
+    (plan) => plan.plan === userPlan && (!plan.interval || plan.interval === interval),
+  );
+  const currency = availablePlans.length > 0 ? availablePlans[0]!.currency : 'USD';
   switch (userPlan) {
     case 'free':
       return {
@@ -32,8 +37,9 @@ export const getPlanDetails = (
         color: 'bg-gray-200 text-gray-800',
         hintColor: 'text-gray-800/75',
         price: 0,
+        currency,
         price_id: availablePlan?.price_id,
-        interval: _('month'),
+        interval: interval === 'month' ? _('month') : _('year'),
         features: [
           {
             label: _('Cross-Platform Sync'),
@@ -78,8 +84,9 @@ export const getPlanDetails = (
         color: 'bg-blue-200 text-blue-800',
         hintColor: 'text-blue-800/75',
         price: availablePlan?.price || 499,
+        currency,
         price_id: availablePlan?.price_id,
-        interval: _('month'),
+        interval: interval === 'month' ? _('month') : _('year'),
         features: [
           {
             label: _('Includes All Free Plan Benefits'),
@@ -103,9 +110,9 @@ export const getPlanDetails = (
             ),
           },
           {
-            label: _('2 GB Cloud Sync Storage'),
+            label: _('Cloud Sync Storage'),
             description: _(
-              'Securely store and access your entire reading collection with up to 2 GB of cloud storage.',
+              'Securely store and access your entire reading collection with up to 5 GB of cloud storage.',
             ),
           },
           {
@@ -116,7 +123,7 @@ export const getPlanDetails = (
           },
         ],
         limits: {
-          [_('Cloud Sync Storage')]: '2 GB',
+          [_('Cloud Sync Storage')]: '5 GB',
           [_('AI Translations (per day)')]: '100K',
         },
       };
@@ -127,8 +134,9 @@ export const getPlanDetails = (
         color: 'bg-purple-200 text-purple-800',
         hintColor: 'text-purple-800/75',
         price: availablePlan?.price || 999,
+        currency,
         price_id: availablePlan?.price_id,
-        interval: _('month'),
+        interval: interval === 'month' ? _('month') : _('year'),
         features: [
           {
             label: _('Includes All Plus Plan Benefits'),
@@ -152,14 +160,14 @@ export const getPlanDetails = (
             ),
           },
           {
-            label: _('10 GB Cloud Sync Storage'),
+            label: _('Cloud Sync Storage'),
             description: _(
-              'Securely store and access your entire reading collection with up to 10 GB of cloud storage.',
+              'Securely store and access your entire reading collection with up to 20 GB of cloud storage.',
             ),
           },
         ],
         limits: {
-          [_('Cloud Sync Storage')]: '10 GB',
+          [_('Cloud Sync Storage')]: '20 GB',
           [_('AI Translations (per day)')]: '500K',
         },
       };

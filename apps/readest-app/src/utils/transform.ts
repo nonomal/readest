@@ -8,15 +8,17 @@ import {
   HighlightStyle,
 } from '@/types/book';
 import { DBBookConfig, DBBook, DBBookNote } from '@/types/records';
+import { sanitizeString } from './sanitize';
 
 export const transformBookConfigToDB = (bookConfig: unknown, userId: string): DBBookConfig => {
-  const { bookHash, progress, location, searchConfig, viewSettings, updatedAt } =
+  const { bookHash, progress, location, xpointer, searchConfig, viewSettings, updatedAt } =
     bookConfig as BookConfig;
 
   return {
     user_id: userId,
     book_hash: bookHash!,
     location: location,
+    xpointer: xpointer,
     progress: progress && JSON.stringify(progress),
     search_config: searchConfig && JSON.stringify(searchConfig),
     view_settings: viewSettings && JSON.stringify(viewSettings),
@@ -25,10 +27,12 @@ export const transformBookConfigToDB = (bookConfig: unknown, userId: string): DB
 };
 
 export const transformBookConfigFromDB = (dbBookConfig: DBBookConfig): BookConfig => {
-  const { book_hash, progress, location, search_config, view_settings, updated_at } = dbBookConfig;
+  const { book_hash, progress, location, xpointer, search_config, view_settings, updated_at } =
+    dbBookConfig;
   return {
     bookHash: book_hash,
     location,
+    xpointer,
     progress: progress && JSON.parse(progress),
     searchConfig: search_config && JSON.parse(search_config),
     viewSettings: view_settings && JSON.parse(view_settings),
@@ -58,14 +62,14 @@ export const transformBookToDB = (book: unknown, userId: string): DBBook => {
     user_id: userId,
     book_hash: hash,
     format,
-    title,
-    author,
+    title: sanitizeString(title)!,
+    author: sanitizeString(author)!,
     group_id: groupId,
-    group_name: groupName,
+    group_name: sanitizeString(groupName),
     tags: tags,
     progress: progress,
-    source_title: sourceTitle,
-    metadata: metadata ? JSON.stringify(metadata) : null,
+    source_title: sanitizeString(sourceTitle),
+    metadata: metadata ? sanitizeString(JSON.stringify(metadata)) : null,
     created_at: new Date(createdAt ?? Date.now()).toISOString(),
     updated_at: new Date(updatedAt ?? Date.now()).toISOString(),
     deleted_at: deletedAt ? new Date(deletedAt).toISOString() : null,
@@ -119,7 +123,7 @@ export const transformBookNoteToDB = (bookNote: unknown, userId: string): DBBook
     id,
     type,
     cfi,
-    text,
+    text: sanitizeString(text),
     style,
     color,
     note,

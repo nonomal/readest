@@ -187,7 +187,7 @@ const ColorPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterReset
           </div>
 
           <div className='flex items-center justify-between'>
-            <h2 className=''>{_('Override Book Color')}</h2>
+            <h2 className='font-medium'>{_('Override Book Color')}</h2>
             <input
               type='checkbox'
               className='toggle'
@@ -264,7 +264,7 @@ const ColorPanel: React.FC<SettingsPanelPanelProp> = ({ bookKey, onRegisterReset
                     onChange={(event) => setCodeLanguage(event.target.value as CodeLanguage)}
                     options={CODE_LANGUAGES.map((lang) => ({
                       value: lang,
-                      label: lang,
+                      label: lang === 'auto-detect' ? _('Auto') : lang,
                     }))}
                     disabled={!codeHighlighting}
                   />

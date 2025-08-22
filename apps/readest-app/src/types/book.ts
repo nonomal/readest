@@ -5,6 +5,8 @@ export type BookNoteType = 'bookmark' | 'annotation' | 'excerpt';
 export type HighlightStyle = 'highlight' | 'underline' | 'squiggly';
 export type HighlightColor = 'red' | 'yellow' | 'green' | 'blue' | 'violet';
 
+export const FIXED_LAYOUT_FORMATS: Set<BookFormat> = new Set(['PDF', 'CBZ']);
+
 export interface Book {
   // if Book is a remote book we just lazy load the book content via url
   url?: string;
@@ -92,6 +94,7 @@ export interface BookLayout {
   scrolled: boolean;
   disableClick: boolean;
   swapClickArea: boolean;
+  disableDoubleClick: boolean;
   volumeKeysToFlip: boolean;
   continuousScroll: boolean;
   maxColumnCount: number;
@@ -148,8 +151,9 @@ export interface ViewConfig {
   showFooter: boolean;
   showRemainingTime: boolean;
   showRemainingPages: boolean;
-  showPageNumber: boolean;
+  showProgressInfo: boolean;
   showBarsOnScroll: boolean;
+  progressStyle: 'percentage' | 'fraction';
 }
 
 export interface TTSConfig {
@@ -219,7 +223,8 @@ export interface BookSearchResult {
 export interface BookConfig {
   bookHash?: string;
   progress?: [number, number]; // [current pagenum, total pagenum], 1-based page number
-  location?: string;
+  location?: string; // CFI of the current location
+  xpointer?: string; // XPointer of the current location (for Koreader interoperability)
   booknotes?: BookNote[];
   searchConfig?: Partial<BookSearchConfig>;
   viewSettings?: Partial<ViewSettings>;

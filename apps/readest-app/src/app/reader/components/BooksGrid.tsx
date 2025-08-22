@@ -153,11 +153,12 @@ const BooksGrid: React.FC<BooksGridProps> = ({ bookKeys, onCloseBook }) => {
                 showFooter={showFooter}
                 borderColor={viewSettings.borderColor}
                 horizontalGap={horizontalGapPercent}
-                contentInsets={contentInsets}
+                insets={viewInsets}
               />
             )}
             {showHeader && (
               <SectionInfo
+                bookKey={bookKey}
                 section={sectionLabel}
                 showDoubleBorder={viewSettings.vertical && viewSettings.doubleBorder}
                 isScrolled={viewSettings.scrolled}
